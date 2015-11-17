@@ -26,24 +26,24 @@ func (e *XLSXReaderError) Error() string {
 // getRangeFromString is an internal helper function that converts
 // XLSX internal range syntax to a pair of integers.  For example,
 // the range string "1:3" yield the upper and lower intergers 1 and 3.
-func getRangeFromString(rangeString string) (lower int, upper int, error error) {
+func getRangeFromString(rangeString string) (lower int, upper int, err error) {
 	var parts []string
 	parts = strings.SplitN(rangeString, ":", 2)
 	if parts[0] == "" {
-		error = errors.New(fmt.Sprintf("Invalid range '%s'\n", rangeString))
+		err = errors.New(fmt.Sprintf("Invalid range '%s'\n", rangeString))
 	}
 	if parts[1] == "" {
-		error = errors.New(fmt.Sprintf("Invalid range '%s'\n", rangeString))
+		err = errors.New(fmt.Sprintf("Invalid range '%s'\n", rangeString))
 	}
-	lower, error = strconv.Atoi(parts[0])
-	if error != nil {
-		error = errors.New(fmt.Sprintf("Invalid range (not integer in lower bound) %s\n", rangeString))
+	lower, err = strconv.Atoi(parts[0])
+	if err != nil {
+		err = errors.New(fmt.Sprintf("Invalid range (not integer in lower bound) %s\n", rangeString))
 	}
-	upper, error = strconv.Atoi(parts[1])
-	if error != nil {
-		error = errors.New(fmt.Sprintf("Invalid range (not integer in upper bound) %s\n", rangeString))
+	upper, err = strconv.Atoi(parts[1])
+	if err != nil {
+		err = errors.New(fmt.Sprintf("Invalid range (not integer in upper bound) %s\n", rangeString))
 	}
-	return lower, upper, error
+	return lower, upper, err
 }
 
 // lettersToNumeric is used to convert a character based column
@@ -143,21 +143,21 @@ func numericToLetters(colRef int) string {
 
 // letterOnlyMapF is used in conjunction with strings.Map to return
 // only the characters A-Z and a-z in a string
-func letterOnlyMapF(rune rune) rune {
+func letterOnlyMapF(r rune) rune {
 	switch {
-	case 'A' <= rune && rune <= 'Z':
-		return rune
-	case 'a' <= rune && rune <= 'z':
-		return rune - 32
+	case 'A' <= r && r <= 'Z':
+		return r
+	case 'a' <= r && r <= 'z':
+		return r - 32
 	}
 	return -1
 }
 
 // intOnlyMapF is used in conjunction with strings.Map to return only
 // the numeric portions of a string.
-func intOnlyMapF(rune rune) rune {
-	if rune >= 48 && rune < 58 {
-		return rune
+func intOnlyMapF(r rune) rune {
+	if r >= 48 && r < 58 {
+		return r
 	}
 	return -1
 }
@@ -165,15 +165,15 @@ func intOnlyMapF(rune rune) rune {
 // getCoordsFromCellIDString returns the zero based cartesian
 // coordinates from a cell name in Excel format, e.g. the cellIDString
 // "A1" returns 0, 0 and the "B3" return 1, 2.
-func getCoordsFromCellIDString(cellIDString string) (x, y int, error error) {
+func getCoordsFromCellIDString(cellIDString string) (x, y int, err error) {
 	var letterPart string = strings.Map(letterOnlyMapF, cellIDString)
-	y, error = strconv.Atoi(strings.Map(intOnlyMapF, cellIDString))
-	if error != nil {
-		return x, y, error
+	y, err = strconv.Atoi(strings.Map(intOnlyMapF, cellIDString))
+	if err != nil {
+		return x, y, err
 	}
 	y -= 1 // Zero based
 	x = lettersToNumeric(letterPart)
-	return x, y, error
+	return x, y, err
 }
 
 // getCellIDStringFromCoords returns the Excel format cell name that
@@ -587,9 +587,9 @@ func readSheetFromFile(sc chan *indexedSheet, index int, rsheet xlsxSheet, fi *F
 		}
 	}()
 
-	worksheet, error := getWorksheetFromSheet(rsheet, fi.worksheets, sheetXMLMap)
-	if error != nil {
-		result.Error = error
+	worksheet, err := getWorksheetFromSheet(rsheet, fi.worksheets, sheetXMLMap)
+	if err != nil {
+		result.Error = err
 		sc <- result
 		return
 	}
@@ -665,11 +665,13 @@ func readSheetsFromZipFile(f *zip.File, file *File, sheetXMLMap map[string]strin
 // extract a reference table from the sharedStrings.xml file within
 // the XLSX zip file.
 func readSharedStringsFromZipFile(f *zip.File) (*RefTable, error) {
-	var sst *xlsxSST
-	var error error
-	var rc io.ReadCloser
-	var decoder *xml.Decoder
-	var reftable *RefTable
+	var (
+		sst      *xlsxSST
+		err      error
+		rc       io.ReadCloser
+		decoder  *xml.Decoder
+		reftable *RefTable
+	)
 
 	// In a file with no strings it's possible that
 	// sharedStrings.xml doesn't exist.  In this case the value
@@ -677,15 +679,15 @@ func readSharedStringsFromZipFile(f *zip.File) (*RefTable, error) {
 	if f == nil {
 		return nil, nil
 	}
-	rc, error = f.Open()
-	if error != nil {
-		return nil, error
+	rc, err = f.Open()
+	if err != nil {
+		return nil, err
 	}
 	sst = new(xlsxSST)
 	decoder = xml.NewDecoder(rc)
-	error = decoder.Decode(sst)
-	if error != nil {
-		return nil, error
+	err = decoder.Decode(sst)
+	if err != nil {
+		return nil, err
 	}
 	reftable = MakeSharedStringRefTable(sst)
 	return reftable, nil
@@ -695,19 +697,22 @@ func readSharedStringsFromZipFile(f *zip.File) (*RefTable, error) {
 // extract a style table from the style.xml file within
 // the XLSX zip file.
 func readStylesFromZipFile(f *zip.File, theme *theme) (*xlsxStyleSheet, error) {
-	var style *xlsxStyleSheet
-	var error error
-	var rc io.ReadCloser
-	var decoder *xml.Decoder
-	rc, error = f.Open()
-	if error != nil {
-		return nil, error
+	var (
+		style   *xlsxStyleSheet
+		err     error
+		rc      io.ReadCloser
+		decoder *xml.Decoder
+	)
+
+	rc, err = f.Open()
+	if err != nil {
+		return nil, err
 	}
 	style = newXlsxStyleSheet(theme)
 	decoder = xml.NewDecoder(rc)
-	error = decoder.Decode(style)
-	if error != nil {
-		return nil, error
+	err = decoder.Decode(style)
+	if err != nil {
+		return nil, err
 	}
 	buildNumFmtRefTable(style)
 	return style, nil
@@ -781,11 +786,13 @@ func (w *WorkBookRels) MakeXLSXWorkbookRels() xlsxWorkbookRels {
 // worksheet.xml file they refer to.  The resulting map can be used to
 // reliably derefence the worksheets in the XLSX file.
 func readWorkbookRelationsFromZipFile(workbookRels *zip.File) (WorkBookRels, error) {
-	var sheetXMLMap WorkBookRels
-	var wbRelationships *xlsxWorkbookRels
-	var rc io.ReadCloser
-	var decoder *xml.Decoder
-	var err error
+	var (
+		sheetXMLMap     WorkBookRels
+		wbRelationships *xlsxWorkbookRels
+		rc              io.ReadCloser
+		decoder         *xml.Decoder
+		err             error
+	)
 
 	rc, err = workbookRels.Open()
 	if err != nil {
@@ -818,20 +825,22 @@ func ReadZip(f *zip.ReadCloser) (*File, error) {
 // ReadZipReader() can be used to read an XLSX in memory without
 // touching the filesystem.
 func ReadZipReader(r *zip.Reader) (*File, error) {
-	var err error
-	var file *File
-	var reftable *RefTable
-	var sharedStrings *zip.File
-	var sheetXMLMap map[string]string
-	var sheetsByName map[string]*Sheet
-	var sheets []*Sheet
-	var style *xlsxStyleSheet
-	var styles *zip.File
-	var themeFile *zip.File
-	var v *zip.File
-	var workbook *zip.File
-	var workbookRels *zip.File
-	var worksheets map[string]*zip.File
+	var (
+		err           error
+		file          *File
+		reftable      *RefTable
+		sharedStrings *zip.File
+		sheetXMLMap   map[string]string
+		sheetsByName  map[string]*Sheet
+		sheets        []*Sheet
+		style         *xlsxStyleSheet
+		styles        *zip.File
+		themeFile     *zip.File
+		v             *zip.File
+		workbook      *zip.File
+		workbookRels  *zip.File
+		worksheets    map[string]*zip.File
+	)
 
 	file = NewFile()
 	// file.numFmtRefTable = make(map[int]xlsxNumFmt, 1)
